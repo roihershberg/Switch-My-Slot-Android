@@ -1,2 +1,3 @@
+include ':RootTools'
 rootProject.name='Switch My Slot'
-include ':app'
+include ':app', ':RootTools'
