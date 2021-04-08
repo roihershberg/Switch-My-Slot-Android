@@ -35,6 +35,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import com.stericson.RootTools.RootTools;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -91,8 +92,7 @@ public class MainActivity extends AppCompatActivity {
                 builder.setOnDismissListener(new DialogInterface.OnDismissListener() {  // Closing app on dismiss
                     @Override
                     public void onDismiss(DialogInterface dialog) {
-                        finish();
-                        System.exit(0);
+                        exitApp();
                     }
                 });
 
@@ -114,8 +114,7 @@ public class MainActivity extends AppCompatActivity {
                     builder.setOnDismissListener(new DialogInterface.OnDismissListener() {  // Closing app on dismiss
                         @Override
                         public void onDismiss(DialogInterface dialog) {
-                            finish();
-                            System.exit(0);
+                            exitApp();
                         }
                     });
 
@@ -192,5 +191,10 @@ public class MainActivity extends AppCompatActivity {
         builder.setNegativeButton(getString(android.R.string.no), null);
         AlertDialog dialog = builder.create();
         dialog.show();
+    }
+
+    public void exitApp() {
+        finish();
+        System.exit(0);
     }
 }

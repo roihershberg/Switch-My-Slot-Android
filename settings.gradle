@@ -1,3 +1,4 @@
+include ':RootShell'
 include ':RootTools'
 rootProject.name='Switch My Slot'
-include ':app', ':RootTools'
+include ':app', ':RootTools', ':RootShell'
