@@ -35,6 +35,8 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+
+import com.stericson.RootShell.exceptions.RootDeniedException;
 import com.stericson.RootShell.execution.Command;
 import com.stericson.RootShell.execution.Shell;
 import com.stericson.RootTools.RootTools;
@@ -45,10 +47,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.concurrent.TimeoutException;
 
 public class MainActivity extends AppCompatActivity {
 
-    TextView halInfoTV, numberOfSlotsTV, currentSlotTV, CurrentSlotSuffixTV;
+    TextView halInfoTV, numberOfSlotsTV, currentSlotTV, currentSlotSuffixTV;
     int currentSlot;
     String convertedSlotNumberToAlphabet = null;
     Button button;
@@ -60,50 +63,98 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        Command halinfoCommand, numberOfSlotsCommand, currentSlotCommand, currentSlotSuffixCommand;
+
         halInfoTV = findViewById(R.id.halInfoTV);
         numberOfSlotsTV = findViewById(R.id.numberOfSlotsTV);
         currentSlotTV = findViewById(R.id.currentSlotTV);
-        CurrentSlotSuffixTV = findViewById(R.id.CurrentSlotSuffixTV);
+        currentSlotSuffixTV = findViewById(R.id.CurrentSlotSuffixTV);
         button = findViewById(R.id.button);
 
-        try {
+        if (checkDeviceSupport()) {
 
-            if (checkDeviceSupport()) {
+            // Creating commands
 
-                Process halInfoProcess;
-                halInfoProcess = Runtime.getRuntime().exec("su -c bootctl hal-info");
-                BufferedReader halinfoOUT = new BufferedReader(new InputStreamReader(halInfoProcess.getInputStream()));
-                halInfoTV.setText(halinfoOUT.readLine());
-
-                Process numberOfSlotsProcess;
-                numberOfSlotsProcess = Runtime.getRuntime().exec("su -c bootctl get-number-slots");
-                BufferedReader numberOfSlotsProcessOUT = new BufferedReader(new InputStreamReader(numberOfSlotsProcess.getInputStream()));
-                numberOfSlotsTV.setText(getString(R.string.number_of_slots) + " " + numberOfSlotsProcessOUT.readLine()); //Number of slots:
-
-                Process currentSlotProcess;
-                currentSlotProcess = Runtime.getRuntime().exec("su -c bootctl get-current-slot");
-                BufferedReader currentSlotProcessOUT = new BufferedReader(new InputStreamReader(currentSlotProcess.getInputStream()));
-
-                currentSlot = Integer.parseInt(currentSlotProcessOUT.readLine());
-                if (currentSlot == 0) {
-                    convertedSlotNumberToAlphabet = "A";
-                    button.setText(getString(R.string.switch_slot_to) + " B"); //"Switch Slot to B"
+            halinfoCommand = new Command(0, false, "bootctl hal-info")
+            {
+                @Override
+                public void commandOutput(int id, final String line) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            halInfoTV.setText(line);
+                        }
+                    });
+                    super.commandOutput(id, line);  // MUST be in the end of the method - not in the start
                 }
+            };
 
-                if (currentSlot == 1) {
-                    convertedSlotNumberToAlphabet = "B";
-                    button.setText(getString(R.string.switch_slot_to) + " A"); //"Switch Slot to A"
+            numberOfSlotsCommand = new Command(1, false, "bootctl get-number-slots")
+            {
+                @Override
+                public void commandOutput(int id, final String line) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            numberOfSlotsTV.setText(getString(R.string.number_of_slots) + " " + line);
+                        }
+                    });
+                    super.commandOutput(id, line);
                 }
+            };
 
-                currentSlotTV.setText(getString(R.string.current_slot) + " " + convertedSlotNumberToAlphabet); //"Current slot: "
+            currentSlotCommand = new Command(2, false, "bootctl get-current-slot")
+            {
+                @Override
+                public void commandOutput(int id, final String line) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            currentSlot = Integer.parseInt(line);
 
-                Process CurrentSlotSuffixProcess;
-                CurrentSlotSuffixProcess = Runtime.getRuntime().exec("su -c bootctl get-suffix " + currentSlot);
-                BufferedReader CurrentSlotSuffixProcessOUT = new BufferedReader(new InputStreamReader(CurrentSlotSuffixProcess.getInputStream()));
-                CurrentSlotSuffixTV.setText(getString(R.string.current_slot_suffix) + " " + CurrentSlotSuffixProcessOUT.readLine()); //"Current slot suffix: "
+                            if (currentSlot == 0) {
+                                convertedSlotNumberToAlphabet = "A";
+                                button.setText(getString(R.string.switch_slot_to) + " B"); //"Switch Slot to B"
+                            } else if (currentSlot == 1) {
+                                convertedSlotNumberToAlphabet = "B";
+                                button.setText(getString(R.string.switch_slot_to) + " A"); //"Switch Slot to A"
+                            }
+                            currentSlotTV.setText(getString(R.string.current_slot) + " " + convertedSlotNumberToAlphabet);
+                        }
+                    });
+                    super.commandOutput(id, line);
+                }
+            };
+
+            currentSlotSuffixCommand = new Command(3, false, "bootctl get-suffix " + currentSlot)
+            {
+                @Override
+                public void commandOutput(int id, final String line) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            currentSlotSuffixTV.setText(getString(R.string.current_slot_suffix) + " " + line);
+                        }
+                    });
+                    super.commandOutput(id, line);
+                }
+            };
+
+            try {
+                shell = RootTools.getShell(true);
+
+                // Executing commands
+                shell.add(halinfoCommand);
+                shell.add(numberOfSlotsCommand);
+                shell.add(currentSlotCommand);
+                shell.add(currentSlotSuffixCommand);
+
+            } catch (RootDeniedException e) {
+                e.printStackTrace();
+                displayErrorAndExit(getString(R.string.error_root_denied));
+            } catch (IOException | TimeoutException e) {
+                e.printStackTrace();
             }
-        } catch (IOException | NullPointerException e) {
-            e.printStackTrace();
         }
     }
 
@@ -112,6 +163,8 @@ public class MainActivity extends AppCompatActivity {
      * Checks if the device is supported. The requirements are:
      *  - Android version 7.1 or newer
      *  - A/B partitions (conventional or virtual)
+     *  - SU availability
+     *  - SU granted
      *  - Availability of bootctl utility
      *
      * If the device isn't supported then the app shows an error dialog and exits.
@@ -125,34 +178,24 @@ public class MainActivity extends AppCompatActivity {
 
         if (Integer.parseInt(android.os.Build.VERSION.SDK) < 25) {  // Seamless A/B updates are only from Android 7.1
             unsupportedReason = getString(R.string.error_min_api);
+        } else if (ABChecker.check() == null) {  // if the device don't support the conventional or virtual A/B partitions
+            unsupportedReason = getString(R.string.error_ab_device);
+        } else if (!RootTools.isRootAvailable()) {  // if su binary is not available
+            unsupportedReason = getString(R.string.error_root_required);
+        } else if (!RootTools.isAccessGiven()) {  // if user denied the su request
+            unsupportedReason = getString(R.string.error_root_denied);
+        } else if (!RootTools.checkUtil("bootctl")) {  // checking bootctl availability
+            unsupportedReason = getString(R.string.error_bootctl_missing);
         } else {
-            if (ABChecker.check() != null) {  // if the device supports the conventional or virtual A/B partitions
-
-                // checking for bootctl availability
-                try {
-                    Process bootctlCheckerProcess;
-                    bootctlCheckerProcess = Runtime.getRuntime().exec("su -c if [ -x \"$(command -v bootctl)\" ]; then echo 1; else echo 0; fi");
-                    BufferedReader bootctlCheckerProcessOUT = new BufferedReader(new InputStreamReader(bootctlCheckerProcess.getInputStream()));
-
-                    if (bootctlCheckerProcessOUT.readLine().equals("1")) {  // if bootctl is available
-                        supported = true;
-                    } else {
-                        unsupportedReason = getString(R.string.error_bootctl_missing);
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-            } else {
-                unsupportedReason = getString(R.string.error_ab_device);
-            }
+            supported = true;
         }
 
-        if (!supported) {
+        if (supported) {
+            Log.d("Switch My Slot", "Device supported! This is an A/B device with Android version 7.1 or newer and bootctl utility is available.");
+        } else {
             Log.e("Switch My Slot", "Error: Device unsupported. " + unsupportedReason);
             displayErrorAndExit(unsupportedReason);
         }
-        Log.d("Switch My Slot", "Device supported! This is an A/B device with Android version 7.1 or newer and bootctl utility is available.");
 
         return supported;
     }
@@ -184,14 +227,27 @@ public class MainActivity extends AppCompatActivity {
         builder.setPositiveButton(getString(android.R.string.ok), new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
+
+                String setActiveSlotCommandText = "";
+                Command setActiveSlotCommand, rebootCommand;
+
+                if (currentSlot == 0) {
+                    setActiveSlotCommandText = "bootctl set-active-boot-slot 1";
+                } else if (currentSlot == 1) {
+                    setActiveSlotCommandText = "bootctl set-active-boot-slot 0";
+                }
+
+                // Creating commands
+                setActiveSlotCommand = new Command(4, false, setActiveSlotCommandText);
+                rebootCommand = new Command(5, false, "svc power reboot || reboot");
+
                 try {
-                    if (currentSlot == 0) {
-                        Runtime.getRuntime().exec("su -c bootctl set-active-boot-slot 1");
-                    }
-                    if (currentSlot == 1) {
-                        Runtime.getRuntime().exec("su -c bootctl set-active-boot-slot 0");
-                    }
-                    Runtime.getRuntime().exec("su -c svc power reboot || reboot");
+                    
+                    // Executing commands
+                    shell.add(setActiveSlotCommand);
+                    shell.add(rebootCommand);
+                    shell.close();
+
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -233,6 +289,11 @@ public class MainActivity extends AppCompatActivity {
      *
      */
     public void exitApp() {
+        try {
+            if (shell != null && !shell.isClosed) shell.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         finish();
         System.exit(0);
     }
