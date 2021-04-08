@@ -12,5 +12,5 @@
     <string name="error_min_api">The minimum compatible version of Android is Nougat (7.1)</string>
     <string name="dialog_confirmation">Do you want to switch the slot?</string>
     <string name="dialog_error_title">Error</string>
-    <string name="dialog_bootctl_missing">Bootctl utility is missing.</string>
+    <string name="error_bootctl_missing">Bootctl utility is missing.</string>
 </resources>
