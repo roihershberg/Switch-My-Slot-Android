@@ -44,9 +44,7 @@ import com.stericson.RootTools.RootTools;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.concurrent.TimeoutException;
 
 public class MainActivity extends AppCompatActivity {
