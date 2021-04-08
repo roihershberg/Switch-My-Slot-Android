@@ -68,39 +68,40 @@ public class MainActivity extends AppCompatActivity {
 
         try {
 
-            checkDeviceSupport();
+            if (checkDeviceSupport()) {
 
-            Process halInfoProcess;
-            halInfoProcess = Runtime.getRuntime().exec("su -c bootctl hal-info");
-            BufferedReader halinfoOUT = new BufferedReader(new InputStreamReader(halInfoProcess.getInputStream()));
-            halInfoTV.setText(halinfoOUT.readLine());
+                Process halInfoProcess;
+                halInfoProcess = Runtime.getRuntime().exec("su -c bootctl hal-info");
+                BufferedReader halinfoOUT = new BufferedReader(new InputStreamReader(halInfoProcess.getInputStream()));
+                halInfoTV.setText(halinfoOUT.readLine());
 
-            Process numberOfSlotsProcess;
-            numberOfSlotsProcess = Runtime.getRuntime().exec("su -c bootctl get-number-slots");
-            BufferedReader numberOfSlotsProcessOUT = new BufferedReader(new InputStreamReader(numberOfSlotsProcess.getInputStream()));
-            numberOfSlotsTV.setText(getString(R.string.number_of_slots) + " " + numberOfSlotsProcessOUT.readLine()); //Number of slots:
+                Process numberOfSlotsProcess;
+                numberOfSlotsProcess = Runtime.getRuntime().exec("su -c bootctl get-number-slots");
+                BufferedReader numberOfSlotsProcessOUT = new BufferedReader(new InputStreamReader(numberOfSlotsProcess.getInputStream()));
+                numberOfSlotsTV.setText(getString(R.string.number_of_slots) + " " + numberOfSlotsProcessOUT.readLine()); //Number of slots:
 
-            Process currentSlotProcess;
-            currentSlotProcess = Runtime.getRuntime().exec("su -c bootctl get-current-slot");
-            BufferedReader currentSlotProcessOUT = new BufferedReader(new InputStreamReader(currentSlotProcess.getInputStream()));
+                Process currentSlotProcess;
+                currentSlotProcess = Runtime.getRuntime().exec("su -c bootctl get-current-slot");
+                BufferedReader currentSlotProcessOUT = new BufferedReader(new InputStreamReader(currentSlotProcess.getInputStream()));
 
-            currentSlot = Integer.parseInt(currentSlotProcessOUT.readLine());
-            if (currentSlot == 0) {
-                convertedSlotNumberToAlphabet = "A";
-                button.setText(getString(R.string.switch_slot_to) + " B"); //"Switch Slot to B"
+                currentSlot = Integer.parseInt(currentSlotProcessOUT.readLine());
+                if (currentSlot == 0) {
+                    convertedSlotNumberToAlphabet = "A";
+                    button.setText(getString(R.string.switch_slot_to) + " B"); //"Switch Slot to B"
+                }
+
+                if (currentSlot == 1) {
+                    convertedSlotNumberToAlphabet = "B";
+                    button.setText(getString(R.string.switch_slot_to) + " A"); //"Switch Slot to A"
+                }
+
+                currentSlotTV.setText(getString(R.string.current_slot) + " " + convertedSlotNumberToAlphabet); //"Current slot: "
+
+                Process CurrentSlotSuffixProcess;
+                CurrentSlotSuffixProcess = Runtime.getRuntime().exec("su -c bootctl get-suffix " + currentSlot);
+                BufferedReader CurrentSlotSuffixProcessOUT = new BufferedReader(new InputStreamReader(CurrentSlotSuffixProcess.getInputStream()));
+                CurrentSlotSuffixTV.setText(getString(R.string.current_slot_suffix) + " " + CurrentSlotSuffixProcessOUT.readLine()); //"Current slot suffix: "
             }
-
-            if (currentSlot == 1) {
-                convertedSlotNumberToAlphabet = "B";
-                button.setText(getString(R.string.switch_slot_to) + " A"); //"Switch Slot to A"
-            }
-
-            currentSlotTV.setText(getString(R.string.current_slot) + " " + convertedSlotNumberToAlphabet); //"Current slot: "
-
-            Process CurrentSlotSuffixProcess;
-            CurrentSlotSuffixProcess = Runtime.getRuntime().exec("su -c bootctl get-suffix " + currentSlot);
-            BufferedReader CurrentSlotSuffixProcessOUT = new BufferedReader(new InputStreamReader(CurrentSlotSuffixProcess.getInputStream()));
-            CurrentSlotSuffixTV.setText(getString(R.string.current_slot_suffix) + " " + CurrentSlotSuffixProcessOUT.readLine()); //"Current slot suffix: "
         } catch (IOException | NullPointerException e) {
             e.printStackTrace();
         }
@@ -114,8 +115,10 @@ public class MainActivity extends AppCompatActivity {
      *  - Availability of bootctl utility
      *
      * If the device isn't supported then the app shows an error dialog and exits.
+     *
+     * @return True if the device is supported, else false.
      */
-    public void checkDeviceSupport() {
+    public boolean checkDeviceSupport() {
 
         boolean supported = false;
         String unsupportedReason = "";
@@ -149,8 +152,9 @@ public class MainActivity extends AppCompatActivity {
             Log.e("Switch My Slot", "Error: Device unsupported. " + unsupportedReason);
             displayErrorAndExit(unsupportedReason);
         }
-
         Log.d("Switch My Slot", "Device supported! This is an A/B device with Android version 7.1 or newer and bootctl utility is available.");
+
+        return supported;
     }
 
 
