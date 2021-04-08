@@ -50,6 +50,7 @@ import java.util.concurrent.TimeoutException;
 public class MainActivity extends AppCompatActivity {
 
     TextView halInfoTV, numberOfSlotsTV, currentSlotTV, currentSlotSuffixTV;
+    Command halinfoCommand, numberOfSlotsCommand, currentSlotCommand, currentSlotSuffixCommand;
     int currentSlot;
     String convertedSlotNumberToAlphabet = null;
     Button button;
@@ -60,8 +61,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        Command halinfoCommand, numberOfSlotsCommand, currentSlotCommand, currentSlotSuffixCommand;
 
         halInfoTV = findViewById(R.id.halInfoTV);
         numberOfSlotsTV = findViewById(R.id.numberOfSlotsTV);
@@ -105,11 +104,26 @@ public class MainActivity extends AppCompatActivity {
             {
                 @Override
                 public void commandOutput(int id, final String line) {
+                    currentSlot = Integer.parseInt(line);
+
+                    // Creating get-suffix command with current slot
+                    currentSlotSuffixCommand = new Command(3, false, "bootctl get-suffix " + currentSlot)
+                    {
+                        @Override
+                        public void commandOutput(int id, final String line) {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    currentSlotSuffixTV.setText(getString(R.string.current_slot_suffix) + " " + line);
+                                }
+                            });
+                            super.commandOutput(id, line);
+                        }
+                    };
+
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            currentSlot = Integer.parseInt(line);
-
                             if (currentSlot == 0) {
                                 convertedSlotNumberToAlphabet = "A";
                                 button.setText(getString(R.string.switch_slot_to) + " B"); //"Switch Slot to B"
@@ -124,20 +138,6 @@ public class MainActivity extends AppCompatActivity {
                 }
             };
 
-            currentSlotSuffixCommand = new Command(3, false, "bootctl get-suffix " + currentSlot)
-            {
-                @Override
-                public void commandOutput(int id, final String line) {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            currentSlotSuffixTV.setText(getString(R.string.current_slot_suffix) + " " + line);
-                        }
-                    });
-                    super.commandOutput(id, line);
-                }
-            };
-
             try {
                 shell = RootTools.getShell(true);
 
@@ -145,6 +145,7 @@ public class MainActivity extends AppCompatActivity {
                 shell.add(halinfoCommand);
                 shell.add(numberOfSlotsCommand);
                 shell.add(currentSlotCommand);
+                while (currentSlotSuffixCommand == null); // waiting for command creation with the current slot
                 shell.add(currentSlotSuffixCommand);
 
             } catch (RootDeniedException e) {
