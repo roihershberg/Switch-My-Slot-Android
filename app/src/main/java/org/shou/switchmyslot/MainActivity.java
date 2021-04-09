@@ -30,6 +30,7 @@ import android.annotation.SuppressLint;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -41,20 +42,31 @@ import com.stericson.RootShell.execution.Command;
 import com.stericson.RootShell.execution.Shell;
 import com.stericson.RootTools.RootTools;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.ViewModelProvider;
 
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
 public class MainActivity extends AppCompatActivity {
 
+    // UI
     TextView halInfoTV, numberOfSlotsTV, currentSlotTV, currentSlotSuffixTV;
-    Command halinfoCommand, numberOfSlotsCommand, currentSlotCommand, currentSlotSuffixCommand;
-    int currentSlot;
-    String convertedSlotNumberToAlphabet = null;
+    AlertDialog errorDialog, confirmationDialog;
     Button button;
+
+    // Shell integration
+    Command halInfoCommand, numberOfSlotsCommand, currentSlotCommand, currentSlotSuffixCommand;
+    boolean informationGathered;
     Shell shell;
+
+    // Information to preserve during re-creation of activity (except from convertedSlotAlphabet)
+    String halInfo, numberOfSlots, currentSlotSuffix, convertedSlotAlphabet, errorDialogString;
+    boolean confirmationDialogShown, errorDialogShown;
+    int currentSlot;
+
 
     @SuppressLint("SetTextI18n")
     @Override
@@ -68,92 +80,149 @@ public class MainActivity extends AppCompatActivity {
         currentSlotSuffixTV = findViewById(R.id.CurrentSlotSuffixTV);
         button = findViewById(R.id.button);
 
-        if (checkDeviceSupport()) {
+        MainActivityViewModel model = new ViewModelProvider(this).get(MainActivityViewModel.class);  // for preserving the root shell through re-creations of the activity
 
-            // Creating commands
+        // if the activity is being restored (device rotation, multi-window mode, re-opening the app after it got killed in the background by the system)
+        if (savedInstanceState != null) {
 
-            halinfoCommand = new Command(0, false, "bootctl hal-info")
-            {
-                @Override
-                public void commandOutput(int id, final String line) {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            halInfoTV.setText(line);
-                        }
-                    });
-                    super.commandOutput(id, line);  // MUST be in the end of the method - not in the start
+            // Restoring information from the saved state of the activity
+
+            errorDialogShown = savedInstanceState.getBoolean(Constants.STATE_ERROR_DIALOG_SHOWN);
+            errorDialogString = savedInstanceState.getString(Constants.STATE_ERROR_DIALOG_STRING);
+
+            if (errorDialogShown) {  // if the error dialog was visible before the activity's re-creation then show it again
+                displayErrorAndExit(errorDialogString);
+            } else {  // if not then keep restoring information
+                halInfo = savedInstanceState.getString(Constants.STATE_HAL_INFO);
+                numberOfSlots = savedInstanceState.getString(Constants.STATE_NUMBER_OF_SLOTS);
+                currentSlot = savedInstanceState.getInt(Constants.STATE_CURRENT_SLOT);
+                currentSlotSuffix = savedInstanceState.getString(Constants.STATE_CURRENT_SLOT_SUFFIX);
+                confirmationDialogShown = savedInstanceState.getBoolean(Constants.STATE_CONFIRMATION_DIALOG_SHOWN);
+
+                shell = model.getShell();  // getting the shell that was preserved by the ViewModel
+                if (shell == null) {  // if it is a re-creation of the activity after the app got killed in the background by the system. i.e., the shell was terminated
+                    try {
+                        shell = RootTools.getShell(true, 0, Shell.defaultContext, 0);  // trying to get a new root shell
+                    } catch (RootDeniedException e) {
+                        e.printStackTrace();
+                        displayErrorAndExit(getString(R.string.error_root_denied));
+                    } catch (IOException | TimeoutException e) {
+                        e.printStackTrace();
+                        displayErrorAndExit(e.getMessage());
+                    }
                 }
-            };
 
-            numberOfSlotsCommand = new Command(1, false, "bootctl get-number-slots")
-            {
-                @Override
-                public void commandOutput(int id, final String line) {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            numberOfSlotsTV.setText(getString(R.string.number_of_slots) + " " + line);
-                        }
-                    });
-                    super.commandOutput(id, line);
+                if (confirmationDialogShown) {  // if the confirmation dialog was visible before the activity's re-creation then show it again by calling the onClick listener of the button that switches the slot
+                    switchSlot(button);
                 }
-            };
-
-            currentSlotCommand = new Command(2, false, "bootctl get-current-slot")
-            {
-                @Override
-                public void commandOutput(int id, final String line) {
-                    currentSlot = Integer.parseInt(line);
-
-                    // Creating get-suffix command with current slot
-                    currentSlotSuffixCommand = new Command(3, false, "bootctl get-suffix " + currentSlot)
-                    {
-                        @Override
-                        public void commandOutput(int id, final String line) {
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    currentSlotSuffixTV.setText(getString(R.string.current_slot_suffix) + " " + line);
-                                }
-                            });
-                            super.commandOutput(id, line);
-                        }
-                    };
-
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (currentSlot == 0) {
-                                convertedSlotNumberToAlphabet = "A";
-                                button.setText(getString(R.string.switch_slot_to) + " B"); //"Switch Slot to B"
-                            } else if (currentSlot == 1) {
-                                convertedSlotNumberToAlphabet = "B";
-                                button.setText(getString(R.string.switch_slot_to) + " A"); //"Switch Slot to A"
-                            }
-                            currentSlotTV.setText(getString(R.string.current_slot) + " " + convertedSlotNumberToAlphabet);
-                        }
-                    });
-                    super.commandOutput(id, line);
-                }
-            };
-
-            try {
-                shell = RootTools.getShell(true);
-
-                // Executing commands
-                shell.add(halinfoCommand);
-                shell.add(numberOfSlotsCommand);
-                shell.add(currentSlotCommand);
-                while (currentSlotSuffixCommand == null); // waiting for command creation with the current slot
-                shell.add(currentSlotSuffixCommand);
-
-            } catch (RootDeniedException e) {
-                e.printStackTrace();
-                displayErrorAndExit(getString(R.string.error_root_denied));
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
             }
+        } else {  // if it is the first creation of the activity
+
+            if (checkDeviceSupport()) {  // if the device is supported
+
+                // Creating commands
+                halInfoCommand = new Command(Constants.HAL_INFO_COMMAND_ID, false, "bootctl hal-info") {
+                    @Override
+                    public void commandOutput(int id, String line) {
+                        halInfo = line;
+                        super.commandOutput(id, line);  // MUST be in the end of the method - not in the start
+                    }
+                };
+
+                numberOfSlotsCommand = new Command(Constants.NUMBER_OF_SLOTS_COMMAND_ID, false, "bootctl get-number-slots") {
+                    @Override
+                    public void commandOutput(int id, String line) {
+                        numberOfSlots = line;
+                        super.commandOutput(id, line);
+                    }
+                };
+
+                currentSlotCommand = new Command(Constants.CURRENT_SLOT_COMMAND_ID, false, "bootctl get-current-slot") {
+                    @Override
+                    public void commandOutput(int id, String line) {
+                        currentSlot = Integer.parseInt(line);
+
+                        // Creating get-suffix command with current slot
+                        currentSlotSuffixCommand = new Command(Constants.CURRENT_SLOT_SUFFIX_COMMAND_ID, false, "bootctl get-suffix " + currentSlot) {
+                            @Override
+                            public void commandOutput(int id, String line) {
+                                currentSlotSuffix = line;
+                                informationGathered = true;  // Releases main thread to assign the information
+                                super.commandOutput(id, line);
+                            }
+                        };
+
+                        super.commandOutput(id, line);
+                    }
+                };
+
+                try {
+                    shell = RootTools.getShell(true, 0, Shell.defaultContext, 0);
+
+                    // Executing commands
+                    informationGathered = false;
+                    shell.add(halInfoCommand);
+                    shell.add(numberOfSlotsCommand);
+                    shell.add(currentSlotCommand);
+                    while (currentSlotSuffixCommand == null); // waiting for command creation with the current slot
+                    shell.add(currentSlotSuffixCommand);
+                    while (!informationGathered); // waiting for all the information from the commands, i.e., waiting for the last command to handle its output
+
+                } catch (RootDeniedException e) {
+                    e.printStackTrace();
+                    displayErrorAndExit(getString(R.string.error_root_denied));
+                } catch (IOException | TimeoutException e) {
+                    e.printStackTrace();
+                    displayErrorAndExit(e.getMessage());
+                }
+            }
+        }
+
+        if (!errorDialogShown) {  // Assigning information to the Views if there isn't an error dialog
+            halInfoTV.setText(halInfo);
+            numberOfSlotsTV.setText(getString(R.string.number_of_slots) + " " + numberOfSlots);
+            currentSlotSuffixTV.setText(getString(R.string.current_slot_suffix) + " " + currentSlotSuffix);
+
+            if (currentSlot == 0) {
+                convertedSlotAlphabet = "A";
+                button.setText(getString(R.string.switch_slot_to) + " B"); //"Switch Slot to B"
+            } else if (currentSlot == 1) {
+                convertedSlotAlphabet = "B";
+                button.setText(getString(R.string.switch_slot_to) + " A"); //"Switch Slot to A"
+            }
+            currentSlotTV.setText(getString(R.string.current_slot) + " " + convertedSlotAlphabet);
+        }
+    }
+
+
+    @Override
+    public void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+
+        // Saving information from bootctl utility (so no need to run the commands once again when the activity is being restored) and dialogs
+        outState.putString(Constants.STATE_HAL_INFO, halInfo);
+        outState.putString(Constants.STATE_NUMBER_OF_SLOTS, numberOfSlots);
+        outState.putInt(Constants.STATE_CURRENT_SLOT, currentSlot);
+        outState.putString(Constants.STATE_CURRENT_SLOT_SUFFIX, currentSlotSuffix);
+        outState.putBoolean(Constants.STATE_CONFIRMATION_DIALOG_SHOWN, confirmationDialogShown);  // if the confirmation dialog is visible
+        outState.putBoolean(Constants.STATE_ERROR_DIALOG_SHOWN, errorDialogShown);  // if the error dialog is visible
+        if (errorDialogShown) {
+            outState.putString(Constants.STATE_ERROR_DIALOG_STRING, errorDialogString);
+        }
+    }
+
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        // if a dialog is visible, dismissing it without the listener (to show it again if the activity is going to be re-created)
+        if (errorDialogShown) {
+            errorDialog.setOnDismissListener(null);
+            errorDialog.dismiss();
+        } else if (confirmationDialogShown) {
+            confirmationDialog.setOnDismissListener(null);
+            confirmationDialog.dismiss();
         }
     }
 
@@ -175,7 +244,7 @@ public class MainActivity extends AppCompatActivity {
         boolean supported = false;
         String unsupportedReason = "";
 
-        if (Integer.parseInt(android.os.Build.VERSION.SDK) < 25) {  // Seamless A/B updates are only from Android 7.1
+        if (Integer.parseInt(Build.VERSION.SDK) < Build.VERSION_CODES.N_MR1) {  // Seamless A/B updates are only from Android Nougat 7.1
             unsupportedReason = getString(R.string.error_min_api);
         } else if (ABChecker.check() == null) {  // if the device don't support the conventional or virtual A/B partitions
             unsupportedReason = getString(R.string.error_ab_device);
@@ -253,8 +322,17 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         builder.setNegativeButton(getString(android.R.string.no), null);
-        AlertDialog dialog = builder.create();
-        dialog.show();
+
+        builder.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override
+            public void onDismiss(DialogInterface dialog) {
+                confirmationDialogShown = false;
+            }
+        });
+
+        confirmationDialog = builder.create();
+        confirmationDialog.show();
+        confirmationDialogShown = true;
     }
 
 
@@ -268,17 +346,20 @@ public class MainActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
         builder.setTitle(getString(R.string.dialog_error_title));
         builder.setMessage(error);
+        errorDialogString = error;  // Saving error for activity re-creation (if happens)
         builder.setPositiveButton(getString(android.R.string.ok), null);
 
         builder.setOnDismissListener(new DialogInterface.OnDismissListener() {  // Closing app on dismiss
             @Override
             public void onDismiss(DialogInterface dialog) {
+                errorDialogShown = false;
                 exitApp();
             }
         });
 
-        AlertDialog dialog = builder.create();
-        dialog.show();
+        errorDialog = builder.create();
+        errorDialog.show();
+        errorDialogShown = true;
 
     }
 
@@ -289,12 +370,10 @@ public class MainActivity extends AppCompatActivity {
      *
      */
     public void exitApp() {
-        try {
-            if (shell != null && !shell.isClosed) shell.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+            finishAffinity();
+        } else {
+            finish();
         }
-        finish();
-        System.exit(0);
     }
 }
