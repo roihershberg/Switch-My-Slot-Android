@@ -26,6 +26,8 @@
 
 package org.shou.switchmyslot;
 
+import android.util.Log;
+
 import androidx.lifecycle.ViewModel;
 
 import com.stericson.RootShell.execution.Shell;
@@ -44,19 +46,19 @@ public class MainActivityViewModel extends ViewModel {
         return shell;
     }
 
-    public void closeShell() throws IOException {
-        if (shell != null && !shell.isClosed) {
-            shell.close();
+    public void closeShell() {
+        try {
+            if (shell != null && !shell.isClosed) {
+                shell.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
     @Override
     protected void onCleared() {
         super.onCleared();
-        try {
-            closeShell();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        closeShell();
     }
 }

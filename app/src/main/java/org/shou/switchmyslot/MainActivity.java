@@ -37,7 +37,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
-import com.stericson.RootShell.RootShell;
 import com.stericson.RootShell.exceptions.RootDeniedException;
 import com.stericson.RootShell.execution.Command;
 import com.stericson.RootShell.execution.Shell;
@@ -67,6 +66,7 @@ public class MainActivity extends AppCompatActivity {
     String halInfo, numberOfSlots, currentSlotSuffix, convertedSlotAlphabet, errorDialogString;
     boolean confirmationDialogShown, errorDialogShown;
     int currentSlot;
+    MainActivityViewModel model;
 
 
     @SuppressLint("SetTextI18n")
@@ -82,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
         currentSlotSuffixTV = findViewById(R.id.CurrentSlotSuffixTV);
         button = findViewById(R.id.button);
 
-        MainActivityViewModel model = new ViewModelProvider(this).get(MainActivityViewModel.class);  // for preserving the root shell through re-creations of the activity
+        model = new ViewModelProvider(this).get(MainActivityViewModel.class);  // for preserving the root shell through re-creations of the activity
 
         // if the activity is being restored (device rotation, multi-window mode, re-opening the app after it got killed in the background by the system)
         if (savedInstanceState != null) {
@@ -206,6 +206,14 @@ public class MainActivity extends AppCompatActivity {
 
 
     @Override
+    public void onBackPressed() {
+        exitApp();
+        model.onCleared();
+        System.exit(0);  // Completely terminates the process. Fixes the blank screen when opening the app after back button pressed.
+    }
+
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
 
@@ -229,7 +237,7 @@ public class MainActivity extends AppCompatActivity {
         Shell rootShell = null;
 
         try {
-            rootShell = RootTools.getShell(true, 0, Shell.defaultContext, 0);  // trying to get a new root shell
+            rootShell = RootTools.getShell(true);  // trying to get a new root shell
         } catch (RootDeniedException e) {
             e.printStackTrace();
             displayErrorAndExit(getString(R.string.error_root_denied));
