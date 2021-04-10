@@ -36,6 +36,21 @@ import static org.shou.switchmyslot.Utils.isBlank;
 
 public class ABChecker {
 
+
+    public static class ABResult {
+
+        private boolean isVirtual; // if the A/B partitions are virtual or not
+
+        public ABResult(boolean isVirtual) {
+            this.isVirtual = isVirtual;
+        }
+
+        public boolean isVirtual() {
+            return isVirtual;
+        }
+    }
+
+
     /**
      * Checks if device supports A/B partitions.
      *
