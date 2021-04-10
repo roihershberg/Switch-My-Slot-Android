@@ -187,6 +187,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    /**
+     * Saving information like dialogs and bootctl commands' output for activity re-creation
+     *
+     * @param outState The bundle for saving the information
+     */
     @Override
     public void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
@@ -205,6 +210,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    /**
+     * Finishing activity, closing the shell and exiting JVM (otherwise there's a bug when re-opening the app)
+     *
+     */
     @Override
     public void onBackPressed() {
         exitApp();
@@ -213,6 +222,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    /**
+     * Dismissing dialogs when activity is destroyed
+     *
+     */
     @Override
     protected void onDestroy() {
         super.onDestroy();
