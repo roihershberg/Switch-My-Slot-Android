@@ -75,6 +75,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Getting views in the activity
         halInfoTV = findViewById(R.id.halInfoTV);
         numberOfSlotsTV = findViewById(R.id.numberOfSlotsTV);
         currentSlotTV = findViewById(R.id.currentSlotTV);
@@ -89,9 +90,9 @@ public class MainActivity extends AppCompatActivity {
             // Restoring information from the saved state of the activity
 
             errorDialogShown = savedInstanceState.getBoolean(Constants.STATE_ERROR_DIALOG_SHOWN);
-            errorDialogString = savedInstanceState.getString(Constants.STATE_ERROR_DIALOG_STRING);
 
             if (errorDialogShown) {  // if the error dialog was visible before the activity's re-creation then show it again
+                errorDialogString = savedInstanceState.getString(Constants.STATE_ERROR_DIALOG_STRING);
                 displayErrorAndExit(errorDialogString);
             } else {  // if not then keep restoring information
                 halInfo = savedInstanceState.getString(Constants.STATE_HAL_INFO);
@@ -102,16 +103,8 @@ public class MainActivity extends AppCompatActivity {
 
                 shell = model.getShell();  // getting the shell that was preserved by the ViewModel
                 if (shell == null) {  // if it is a re-creation of the activity after the app got killed in the background by the system. i.e., the shell was terminated
-                    try {
-                        shell = RootTools.getShell(true, 0, Shell.defaultContext, 0);  // trying to get a new root shell
-                        model.setShell(shell);
-                    } catch (RootDeniedException e) {
-                        e.printStackTrace();
-                        displayErrorAndExit(getString(R.string.error_root_denied));
-                    } catch (IOException | TimeoutException e) {
-                        e.printStackTrace();
-                        displayErrorAndExit(e.getMessage());
-                    }
+                    shell = getRootShell();
+                    model.setShell(shell);
                 }
 
                 if (confirmationDialogShown) {  // if the confirmation dialog was visible before the activity's re-creation then show it again by calling the onClick listener of the button that switches the slot
@@ -159,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
                 };
 
                 try {
-                    shell = RootTools.getShell(true, 0, Shell.defaultContext, 0);
+                    shell = getRootShell();
                     model.setShell(shell);
 
                     // Executing commands
@@ -170,11 +163,7 @@ public class MainActivity extends AppCompatActivity {
                     while (currentSlotSuffixCommand == null); // waiting for command creation with the current slot
                     shell.add(currentSlotSuffixCommand);
                     while (!informationGathered); // waiting for all the information from the commands, i.e., waiting for the last command to handle its output
-
-                } catch (RootDeniedException e) {
-                    e.printStackTrace();
-                    displayErrorAndExit(getString(R.string.error_root_denied));
-                } catch (IOException | TimeoutException e) {
+                } catch (IOException e) {
                     e.printStackTrace();
                     displayErrorAndExit(e.getMessage());
                 }
@@ -203,14 +192,15 @@ public class MainActivity extends AppCompatActivity {
         super.onSaveInstanceState(outState);
 
         // Saving information from bootctl utility (so no need to run the commands once again when the activity is being restored) and dialogs
-        outState.putString(Constants.STATE_HAL_INFO, halInfo);
-        outState.putString(Constants.STATE_NUMBER_OF_SLOTS, numberOfSlots);
-        outState.putInt(Constants.STATE_CURRENT_SLOT, currentSlot);
-        outState.putString(Constants.STATE_CURRENT_SLOT_SUFFIX, currentSlotSuffix);
-        outState.putBoolean(Constants.STATE_CONFIRMATION_DIALOG_SHOWN, confirmationDialogShown);  // if the confirmation dialog is visible
         outState.putBoolean(Constants.STATE_ERROR_DIALOG_SHOWN, errorDialogShown);  // if the error dialog is visible
         if (errorDialogShown) {
             outState.putString(Constants.STATE_ERROR_DIALOG_STRING, errorDialogString);
+        } else {
+            outState.putString(Constants.STATE_HAL_INFO, halInfo);
+            outState.putString(Constants.STATE_NUMBER_OF_SLOTS, numberOfSlots);
+            outState.putInt(Constants.STATE_CURRENT_SLOT, currentSlot);
+            outState.putString(Constants.STATE_CURRENT_SLOT_SUFFIX, currentSlotSuffix);
+            outState.putBoolean(Constants.STATE_CONFIRMATION_DIALOG_SHOWN, confirmationDialogShown);  // if the confirmation dialog is visible
         }
     }
 
@@ -227,6 +217,28 @@ public class MainActivity extends AppCompatActivity {
             confirmationDialog.setOnDismissListener(null);
             confirmationDialog.dismiss();
         }
+    }
+
+
+    /**
+     * Returns a root shell with proper exceptions handling
+     *
+     * @return The root shell
+     */
+    public Shell getRootShell() {
+        Shell rootShell = null;
+
+        try {
+            rootShell = RootTools.getShell(true, 0, Shell.defaultContext, 0);  // trying to get a new root shell
+        } catch (RootDeniedException e) {
+            e.printStackTrace();
+            displayErrorAndExit(getString(R.string.error_root_denied));
+        } catch (IOException | TimeoutException e) {
+            e.printStackTrace();
+            displayErrorAndExit(e.getMessage());
+        }
+
+        return rootShell;
     }
 
 
