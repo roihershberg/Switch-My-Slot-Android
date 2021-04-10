@@ -37,6 +37,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
+import com.stericson.RootShell.RootShell;
 import com.stericson.RootShell.exceptions.RootDeniedException;
 import com.stericson.RootShell.execution.Command;
 import com.stericson.RootShell.execution.Shell;
@@ -103,6 +104,7 @@ public class MainActivity extends AppCompatActivity {
                 if (shell == null) {  // if it is a re-creation of the activity after the app got killed in the background by the system. i.e., the shell was terminated
                     try {
                         shell = RootTools.getShell(true, 0, Shell.defaultContext, 0);  // trying to get a new root shell
+                        model.setShell(shell);
                     } catch (RootDeniedException e) {
                         e.printStackTrace();
                         displayErrorAndExit(getString(R.string.error_root_denied));
@@ -158,6 +160,7 @@ public class MainActivity extends AppCompatActivity {
 
                 try {
                     shell = RootTools.getShell(true, 0, Shell.defaultContext, 0);
+                    model.setShell(shell);
 
                     // Executing commands
                     informationGathered = false;
